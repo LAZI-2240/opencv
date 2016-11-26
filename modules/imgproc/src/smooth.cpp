@@ -86,18 +86,93 @@ struct RowSum :
         int i = 0, k, ksz_cn = ksize*cn;
 
         width = (width - 1)*cn;
-        for( k = 0; k < cn; k++, S++, D++ )
+        if( ksize == 3 )
         {
-            ST s = 0;
-            for( i = 0; i < ksz_cn; i += cn )
-                s += S[i];
-            D[0] = s;
-            for( i = 0; i < width; i += cn )
+            for( i = 0; i < width + cn; i++ )
             {
-                s += S[i + ksz_cn] - S[i];
-                D[i+cn] = s;
+                D[i] = (ST)S[i] + (ST)S[i+cn] + (ST)S[i+cn*2];
             }
         }
+        else if( ksize == 5 )
+        {
+            for( i = 0; i < width + cn; i++ )
+            {
+                D[i] = (ST)S[i] + (ST)S[i+cn] + (ST)S[i+cn*2] + (ST)S[i + cn*3] + (ST)S[i + cn*4];
+            }
+        }
+        else if( cn == 1 )
+        {
+            ST s = 0;
+            for( i = 0; i < ksz_cn; i++ )
+                s += (ST)S[i];
+            D[0] = s;
+            for( i = 0; i < width; i++ )
+            {
+                s += (ST)S[i + ksz_cn] - (ST)S[i];
+                D[i+1] = s;
+            }
+        }
+        else if( cn == 3 )
+        {
+            ST s0 = 0, s1 = 0, s2 = 0;
+            for( i = 0; i < ksz_cn; i += 3 )
+            {
+                s0 += (ST)S[i];
+                s1 += (ST)S[i+1];
+                s2 += (ST)S[i+2];
+            }
+            D[0] = s0;
+            D[1] = s1;
+            D[2] = s2;
+            for( i = 0; i < width; i += 3 )
+            {
+                s0 += (ST)S[i + ksz_cn] - (ST)S[i];
+                s1 += (ST)S[i + ksz_cn + 1] - (ST)S[i + 1];
+                s2 += (ST)S[i + ksz_cn + 2] - (ST)S[i + 2];
+                D[i+3] = s0;
+                D[i+4] = s1;
+                D[i+5] = s2;
+            }
+        }
+        else if( cn == 4 )
+        {
+            ST s0 = 0, s1 = 0, s2 = 0, s3 = 0;
+            for( i = 0; i < ksz_cn; i += 4 )
+            {
+                s0 += (ST)S[i];
+                s1 += (ST)S[i+1];
+                s2 += (ST)S[i+2];
+                s3 += (ST)S[i+3];
+            }
+            D[0] = s0;
+            D[1] = s1;
+            D[2] = s2;
+            D[3] = s3;
+            for( i = 0; i < width; i += 4 )
+            {
+                s0 += (ST)S[i + ksz_cn] - (ST)S[i];
+                s1 += (ST)S[i + ksz_cn + 1] - (ST)S[i + 1];
+                s2 += (ST)S[i + ksz_cn + 2] - (ST)S[i + 2];
+                s3 += (ST)S[i + ksz_cn + 3] - (ST)S[i + 3];
+                D[i+4] = s0;
+                D[i+5] = s1;
+                D[i+6] = s2;
+                D[i+7] = s3;
+            }
+        }
+        else
+            for( k = 0; k < cn; k++, S++, D++ )
+            {
+                ST s = 0;
+                for( i = 0; i < ksz_cn; i += cn )
+                    s += (ST)S[i];
+                D[0] = s;
+                for( i = 0; i < width; i += cn )
+                {
+                    s += (ST)S[i + ksz_cn] - (ST)S[i];
+                    D[i+cn] = s;
+                }
+            }
     }
 };
 
@@ -138,13 +213,8 @@ struct ColumnSum :
             for( ; sumCount < ksize - 1; sumCount++, src++ )
             {
                 const ST* Sp = (const ST*)src[0];
-                for( i = 0; i <= width - 2; i += 2 )
-                {
-                    ST s0 = SUM[i] + Sp[i], s1 = SUM[i+1] + Sp[i+1];
-                    SUM[i] = s0; SUM[i+1] = s1;
-                }
 
-                for( ; i < width; i++ )
+                for( i = 0; i < width; i++ )
                     SUM[i] += Sp[i];
             }
         }
@@ -222,7 +292,6 @@ struct ColumnSum<int, uchar> :
 
     virtual void operator()(const uchar** src, uchar* dst, int dststep, int count, int width)
     {
-        int i;
         int* SUM;
         bool haveScale = scale != 1;
         double _scale = scale;
@@ -246,7 +315,7 @@ struct ColumnSum<int, uchar> :
             for( ; sumCount < ksize - 1; sumCount++, src++ )
             {
                 const int* Sp = (const int*)src[0];
-                i = 0;
+                int i = 0;
                 #if CV_SSE2
                 if(haveSSE2)
                 {
@@ -281,7 +350,7 @@ struct ColumnSum<int, uchar> :
             uchar* D = (uchar*)dst;
             if( haveScale )
             {
-                i = 0;
+                int i = 0;
                 #if CV_SSE2
                 if(haveSSE2)
                 {
@@ -336,7 +405,7 @@ struct ColumnSum<int, uchar> :
             }
             else
             {
-                i = 0;
+                int i = 0;
                 #if CV_SSE2
                 if(haveSSE2)
                 {
@@ -390,6 +459,152 @@ struct ColumnSum<int, uchar> :
     int sumCount;
     std::vector<int> sum;
 };
+
+
+template<>
+struct ColumnSum<ushort, uchar> :
+public BaseColumnFilter
+{
+    ColumnSum( int _ksize, int _anchor, double _scale ) :
+    BaseColumnFilter()
+    {
+        ksize = _ksize;
+        anchor = _anchor;
+        scale = _scale;
+        sumCount = 0;
+        divDelta = 0;
+        divScale = 1;
+        if( scale != 1 )
+        {
+            int d = cvRound(1./scale);
+            double scalef = ((double)(1 << 16))/d;
+            divScale = cvFloor(scalef);
+            scalef -= divScale;
+            divDelta = d/2;
+            if( scalef < 0.5 )
+                divDelta++;
+            else
+                divScale++;
+        }
+    }
+
+    virtual void reset() { sumCount = 0; }
+
+    virtual void operator()(const uchar** src, uchar* dst, int dststep, int count, int width)
+    {
+        const int ds = divScale;
+        const int dd = divDelta;
+        ushort* SUM;
+        const bool haveScale = scale != 1;
+
+#if CV_SSE2
+        bool haveSSE2 = checkHardwareSupport(CV_CPU_SSE2);
+#elif CV_NEON
+        bool haveNEON = checkHardwareSupport(CV_CPU_NEON);
+#endif
+
+        if( width != (int)sum.size() )
+        {
+            sum.resize(width);
+            sumCount = 0;
+        }
+
+        SUM = &sum[0];
+        if( sumCount == 0 )
+        {
+            memset((void*)SUM, 0, width*sizeof(SUM[0]));
+            for( ; sumCount < ksize - 1; sumCount++, src++ )
+            {
+                const ushort* Sp = (const ushort*)src[0];
+                int i = 0;
+#if CV_SSE2
+                if(haveSSE2)
+                {
+                    for( ; i <= width-8; i+=8 )
+                    {
+                        __m128i _sum = _mm_loadu_si128((const __m128i*)(SUM+i));
+                        __m128i _sp = _mm_loadu_si128((const __m128i*)(Sp+i));
+                        _mm_storeu_si128((__m128i*)(SUM+i),_mm_add_epi16(_sum, _sp));
+                    }
+                }
+#elif CV_NEON
+                if(haveNEON)
+                {
+                    for( ; i <= width - 8; i+=8 )
+                        vst1q_u16(SUM + i, vaddq_u16(vld1q_u16(SUM + i), vld1q_u16(Sp + i)));
+                }
+#endif
+                for( ; i < width; i++ )
+                    SUM[i] += Sp[i];
+            }
+        }
+        else
+        {
+            CV_Assert( sumCount == ksize-1 );
+            src += ksize-1;
+        }
+
+        for( ; count--; src++ )
+        {
+            const ushort* Sp = (const ushort*)src[0];
+            const ushort* Sm = (const ushort*)src[1-ksize];
+            uchar* D = (uchar*)dst;
+            if( haveScale )
+            {
+                int i = 0;
+    #if CV_SSE2
+                if(haveSSE2)
+                {
+                    __m128i ds8 = _mm_set1_epi16((short)ds);
+                    __m128i dd8 = _mm_set1_epi16((short)dd);
+
+                    for( ; i <= width-16; i+=16 )
+                    {
+                        __m128i _sm0  = _mm_loadu_si128((const __m128i*)(Sm+i));
+                        __m128i _sm1  = _mm_loadu_si128((const __m128i*)(Sm+i+8));
+
+                        __m128i _s0  = _mm_add_epi16(_mm_loadu_si128((const __m128i*)(SUM+i)),
+                                                     _mm_loadu_si128((const __m128i*)(Sp+i)));
+                        __m128i _s1  = _mm_add_epi16(_mm_loadu_si128((const __m128i*)(SUM+i+8)),
+                                                     _mm_loadu_si128((const __m128i*)(Sp+i+8)));
+                        __m128i _s2 = _mm_mulhi_epu16(_mm_adds_epu16(_s0, dd8), ds8);
+                        __m128i _s3 = _mm_mulhi_epu16(_mm_adds_epu16(_s1, dd8), ds8);
+                        _s0 = _mm_sub_epi16(_s0, _sm0);
+                        _s1 = _mm_sub_epi16(_s1, _sm1);
+                        _mm_storeu_si128((__m128i*)(D+i), _mm_packus_epi16(_s2, _s3));
+                        _mm_storeu_si128((__m128i*)(SUM+i), _s0);
+                        _mm_storeu_si128((__m128i*)(SUM+i+8), _s1);
+                    }
+                }
+    #endif
+                for( ; i < width; i++ )
+                {
+                    int s0 = SUM[i] + Sp[i];
+                    D[i] = (uchar)((s0 + dd)*ds >> 16);
+                    SUM[i] = (ushort)(s0 - Sm[i]);
+                }
+            }
+            else
+            {
+                int i = 0;
+                for( ; i < width; i++ )
+                {
+                    int s0 = SUM[i] + Sp[i];
+                    D[i] = saturate_cast<uchar>(s0);
+                    SUM[i] = (ushort)(s0 - Sm[i]);
+                }
+            }
+            dst += dststep;
+        }
+    }
+
+    double scale;
+    int sumCount;
+    int divDelta;
+    int divScale;
+    std::vector<ushort> sum;
+};
+
 
 template<>
 struct ColumnSum<int, short> :
@@ -589,7 +804,6 @@ struct ColumnSum<int, ushort> :
 
     virtual void operator()(const uchar** src, uchar* dst, int dststep, int count, int width)
     {
-        int i;
         int* SUM;
         bool haveScale = scale != 1;
         double _scale = scale;
@@ -613,7 +827,7 @@ struct ColumnSum<int, ushort> :
             for( ; sumCount < ksize - 1; sumCount++, src++ )
             {
                 const int* Sp = (const int*)src[0];
-                i = 0;
+                int i = 0;
                 #if CV_SSE2
                 if(haveSSE2)
                 {
@@ -648,7 +862,7 @@ struct ColumnSum<int, ushort> :
             ushort* D = (ushort*)dst;
             if( haveScale )
             {
-                i = 0;
+                int i = 0;
                 #if CV_SSE2
                 if(haveSSE2)
                 {
@@ -698,8 +912,8 @@ struct ColumnSum<int, ushort> :
             }
             else
             {
-                i = 0;
-                #if  CV_SSE2
+                int i = 0;
+                #if CV_SSE2
                 if(haveSSE2)
                 {
                     const __m128i delta0 = _mm_set1_epi32(0x8000);
@@ -767,7 +981,6 @@ struct ColumnSum<int, int> :
 
     virtual void operator()(const uchar** src, uchar* dst, int dststep, int count, int width)
     {
-        int i;
         int* SUM;
         bool haveScale = scale != 1;
         double _scale = scale;
@@ -791,7 +1004,7 @@ struct ColumnSum<int, int> :
             for( ; sumCount < ksize - 1; sumCount++, src++ )
             {
                 const int* Sp = (const int*)src[0];
-                i = 0;
+                int i = 0;
                 #if CV_SSE2
                 if(haveSSE2)
                 {
@@ -826,7 +1039,7 @@ struct ColumnSum<int, int> :
             int* D = (int*)dst;
             if( haveScale )
             {
-                i = 0;
+                int i = 0;
                 #if CV_SSE2
                 if(haveSSE2)
                 {
@@ -868,7 +1081,7 @@ struct ColumnSum<int, int> :
             }
             else
             {
-                i = 0;
+                int i = 0;
                 #if CV_SSE2
                 if(haveSSE2)
                 {
@@ -929,7 +1142,6 @@ struct ColumnSum<int, float> :
 
     virtual void operator()(const uchar** src, uchar* dst, int dststep, int count, int width)
     {
-        int i;
         int* SUM;
         bool haveScale = scale != 1;
         double _scale = scale;
@@ -953,7 +1165,7 @@ struct ColumnSum<int, float> :
             for( ; sumCount < ksize - 1; sumCount++, src++ )
             {
                 const int* Sp = (const int*)src[0];
-                i = 0;
+                int i = 0;
                 #if CV_SSE2
                 if(haveSSE2)
                 {
@@ -989,7 +1201,7 @@ struct ColumnSum<int, float> :
             float* D = (float*)dst;
             if( haveScale )
             {
-                i = 0;
+                int i = 0;
 
                 #if CV_SSE2
                 if(haveSSE2)
@@ -1033,7 +1245,7 @@ struct ColumnSum<int, float> :
             }
             else
             {
-                i = 0;
+                int i = 0;
 
                 #if CV_SSE2
                 if(haveSSE2)
@@ -1082,6 +1294,61 @@ struct ColumnSum<int, float> :
 };
 
 #ifdef HAVE_OPENCL
+
+static bool ocl_boxFilter3x3_8UC1( InputArray _src, OutputArray _dst, int ddepth,
+                                   Size ksize, Point anchor, int borderType, bool normalize )
+{
+    const ocl::Device & dev = ocl::Device::getDefault();
+    int type = _src.type(), sdepth = CV_MAT_DEPTH(type), cn = CV_MAT_CN(type);
+
+    if (ddepth < 0)
+        ddepth = sdepth;
+
+    if (anchor.x < 0)
+        anchor.x = ksize.width / 2;
+    if (anchor.y < 0)
+        anchor.y = ksize.height / 2;
+
+    if ( !(dev.isIntel() && (type == CV_8UC1) &&
+         (_src.offset() == 0) && (_src.step() % 4 == 0) &&
+         (_src.cols() % 16 == 0) && (_src.rows() % 2 == 0) &&
+         (anchor.x == 1) && (anchor.y == 1) &&
+         (ksize.width == 3) && (ksize.height == 3)) )
+        return false;
+
+    float alpha = 1.0f / (ksize.height * ksize.width);
+    Size size = _src.size();
+    size_t globalsize[2] = { 0, 0 };
+    size_t localsize[2] = { 0, 0 };
+    const char * const borderMap[] = { "BORDER_CONSTANT", "BORDER_REPLICATE", "BORDER_REFLECT", 0, "BORDER_REFLECT_101" };
+
+    globalsize[0] = size.width / 16;
+    globalsize[1] = size.height / 2;
+
+    char build_opts[1024];
+    sprintf(build_opts, "-D %s %s", borderMap[borderType], normalize ? "-D NORMALIZE" : "");
+
+    ocl::Kernel kernel("boxFilter3x3_8UC1_cols16_rows2", cv::ocl::imgproc::boxFilter3x3_oclsrc, build_opts);
+    if (kernel.empty())
+        return false;
+
+    UMat src = _src.getUMat();
+    _dst.create(size, CV_MAKETYPE(ddepth, cn));
+    if (!(_dst.offset() == 0 && _dst.step() % 4 == 0))
+        return false;
+    UMat dst = _dst.getUMat();
+
+    int idxArg = kernel.set(0, ocl::KernelArg::PtrReadOnly(src));
+    idxArg = kernel.set(idxArg, (int)src.step);
+    idxArg = kernel.set(idxArg, ocl::KernelArg::PtrWriteOnly(dst));
+    idxArg = kernel.set(idxArg, (int)dst.step);
+    idxArg = kernel.set(idxArg, (int)dst.rows);
+    idxArg = kernel.set(idxArg, (int)dst.cols);
+    if (normalize)
+        idxArg = kernel.set(idxArg, (float)alpha);
+
+    return kernel.run(2, globalsize, (localsize[0] == 0) ? NULL : localsize, false);
+}
 
 #define DIVUP(total, grain) ((total + grain - 1) / (grain))
 #define ROUNDUP(sz, n)      ((sz) + (n) - 1 - (((sz) + (n) - 1) % (n)))
@@ -1276,6 +1543,8 @@ cv::Ptr<cv::BaseRowFilter> cv::getRowSumFilter(int srcType, int sumType, int ksi
 
     if( sdepth == CV_8U && ddepth == CV_32S )
         return makePtr<RowSum<uchar, int> >(ksize, anchor);
+    if( sdepth == CV_8U && ddepth == CV_16U )
+        return makePtr<RowSum<uchar, ushort> >(ksize, anchor);
     if( sdepth == CV_8U && ddepth == CV_64F )
         return makePtr<RowSum<uchar, double> >(ksize, anchor);
     if( sdepth == CV_16U && ddepth == CV_32S )
@@ -1312,6 +1581,8 @@ cv::Ptr<cv::BaseColumnFilter> cv::getColumnSumFilter(int sumType, int dstType, i
 
     if( ddepth == CV_8U && sdepth == CV_32S )
         return makePtr<ColumnSum<int, uchar> >(ksize, anchor, scale);
+    if( ddepth == CV_8U && sdepth == CV_16U )
+        return makePtr<ColumnSum<ushort, uchar> >(ksize, anchor, scale);
     if( ddepth == CV_8U && sdepth == CV_64F )
         return makePtr<ColumnSum<double, uchar> >(ksize, anchor, scale);
     if( ddepth == CV_16U && sdepth == CV_32S )
@@ -1346,7 +1617,10 @@ cv::Ptr<cv::FilterEngine> cv::createBoxFilter( int srcType, int dstType, Size ks
 {
     int sdepth = CV_MAT_DEPTH(srcType);
     int cn = CV_MAT_CN(srcType), sumType = CV_64F;
-    if( sdepth <= CV_32S && (!normalize ||
+    if( sdepth == CV_8U && CV_MAT_DEPTH(dstType) == CV_8U &&
+        ksize.width*ksize.height <= 256 )
+        sumType = CV_16U;
+    else if( sdepth <= CV_32S && (!normalize ||
         ksize.width*ksize.height <= (sdepth == CV_8U ? (1<<23) :
             sdepth == CV_16U ? (1 << 15) : (1 << 16))) )
         sumType = CV_32S;
@@ -1360,7 +1634,8 @@ cv::Ptr<cv::FilterEngine> cv::createBoxFilter( int srcType, int dstType, Size ks
            srcType, dstType, sumType, borderType );
 }
 
-#if defined(HAVE_IPP)
+// TODO: IPP performance regression
+#if defined(HAVE_IPP) && IPP_DISABLE_BLOCK
 namespace cv
 {
 static bool ipp_boxfilter( InputArray _src, OutputArray _dst, int ddepth,
@@ -1463,6 +1738,11 @@ void cv::boxFilter( InputArray _src, OutputArray _dst, int ddepth,
 {
     CV_INSTRUMENT_REGION()
 
+    CV_OCL_RUN(_dst.isUMat() &&
+               (borderType == BORDER_REPLICATE || borderType == BORDER_CONSTANT ||
+                borderType == BORDER_REFLECT || borderType == BORDER_REFLECT_101),
+               ocl_boxFilter3x3_8UC1(_src, _dst, ddepth, ksize, anchor, borderType, normalize))
+
     CV_OCL_RUN(_dst.isUMat(), ocl_boxFilter(_src, _dst, ddepth, ksize, anchor, borderType, normalize))
 
     Mat src = _src.getMat();
@@ -1483,9 +1763,8 @@ void cv::boxFilter( InputArray _src, OutputArray _dst, int ddepth,
         return;
 #endif
 
-#ifdef HAVE_IPP
+#if defined HAVE_IPP && IPP_DISABLE_BLOCK
     int ippBorderType = borderType & ~BORDER_ISOLATED;
-#endif
     Point ocvAnchor, ippAnchor;
     ocvAnchor.x = anchor.x < 0 ? ksize.width / 2 : anchor.x;
     ocvAnchor.y = anchor.y < 0 ? ksize.height / 2 : anchor.y;
@@ -1496,13 +1775,16 @@ void cv::boxFilter( InputArray _src, OutputArray _dst, int ddepth,
              ippBorderType == BORDER_CONSTANT) && ocvAnchor == ippAnchor &&
              _dst.cols() != ksize.width && _dst.rows() != ksize.height),
              ipp_boxfilter( _src,  _dst,  ddepth, ksize,  anchor, normalize,  borderType));
+#endif
 
+    Point ofs;
+    Size wsz(src.cols, src.rows);
+    if(!(borderType&BORDER_ISOLATED))
+        src.locateROI( wsz, ofs );
+    borderType = (borderType&~BORDER_ISOLATED);
 
     Ptr<FilterEngine> f = createBoxFilter( src.type(), dst.type(),
                         ksize, anchor, normalize, borderType );
-    Point ofs;
-    Size wsz(src.cols, src.rows);
-    src.locateROI( wsz, ofs );
 
     f->apply( src, dst, wsz, ofs );
 }
@@ -1734,9 +2016,68 @@ cv::Ptr<cv::FilterEngine> cv::createGaussianFilter( int type, Size ksize,
     return createSeparableLinearFilter( type, type, kx, ky, Point(-1,-1), 0, borderType );
 }
 
-#ifdef HAVE_IPP
 namespace cv
 {
+#ifdef HAVE_OPENCL
+
+static bool ocl_GaussianBlur3x3_8UC1(InputArray _src, OutputArray _dst, int ddepth,
+                                     InputArray _kernelX, InputArray _kernelY, int borderType)
+{
+    const ocl::Device & dev = ocl::Device::getDefault();
+    int type = _src.type(), sdepth = CV_MAT_DEPTH(type), cn = CV_MAT_CN(type);
+
+    if ( !(dev.isIntel() && (type == CV_8UC1) &&
+         (_src.offset() == 0) && (_src.step() % 4 == 0) &&
+         (_src.cols() % 16 == 0) && (_src.rows() % 2 == 0)) )
+        return false;
+
+    Mat kernelX = _kernelX.getMat().reshape(1, 1);
+    if (kernelX.cols % 2 != 1)
+        return false;
+    Mat kernelY = _kernelY.getMat().reshape(1, 1);
+    if (kernelY.cols % 2 != 1)
+        return false;
+
+    if (ddepth < 0)
+        ddepth = sdepth;
+
+    Size size = _src.size();
+    size_t globalsize[2] = { 0, 0 };
+    size_t localsize[2] = { 0, 0 };
+
+    globalsize[0] = size.width / 16;
+    globalsize[1] = size.height / 2;
+
+    const char * const borderMap[] = { "BORDER_CONSTANT", "BORDER_REPLICATE", "BORDER_REFLECT", 0, "BORDER_REFLECT_101" };
+    char build_opts[1024];
+    sprintf(build_opts, "-D %s %s%s", borderMap[borderType],
+            ocl::kernelToStr(kernelX, CV_32F, "KERNEL_MATRIX_X").c_str(),
+            ocl::kernelToStr(kernelY, CV_32F, "KERNEL_MATRIX_Y").c_str());
+
+    ocl::Kernel kernel("gaussianBlur3x3_8UC1_cols16_rows2", cv::ocl::imgproc::gaussianBlur3x3_oclsrc, build_opts);
+    if (kernel.empty())
+        return false;
+
+    UMat src = _src.getUMat();
+    _dst.create(size, CV_MAKETYPE(ddepth, cn));
+    if (!(_dst.offset() == 0 && _dst.step() % 4 == 0))
+        return false;
+    UMat dst = _dst.getUMat();
+
+    int idxArg = kernel.set(0, ocl::KernelArg::PtrReadOnly(src));
+    idxArg = kernel.set(idxArg, (int)src.step);
+    idxArg = kernel.set(idxArg, ocl::KernelArg::PtrWriteOnly(dst));
+    idxArg = kernel.set(idxArg, (int)dst.step);
+    idxArg = kernel.set(idxArg, (int)dst.rows);
+    idxArg = kernel.set(idxArg, (int)dst.cols);
+
+    return kernel.run(2, globalsize, (localsize[0] == 0) ? NULL : localsize, false);
+}
+
+#endif
+
+#ifdef HAVE_IPP
+
 static bool ipp_GaussianBlur( InputArray _src, OutputArray _dst, Size ksize,
                    double sigma1, double sigma2,
                    int borderType )
@@ -1827,8 +2168,8 @@ static bool ipp_GaussianBlur( InputArray _src, OutputArray _dst, Size ksize,
 #endif
     return false;
 }
-}
 #endif
+}
 
 
 void cv::GaussianBlur( InputArray _src, OutputArray _dst, Size ksize,
@@ -1866,6 +2207,12 @@ void cv::GaussianBlur( InputArray _src, OutputArray _dst, Size ksize,
 
     Mat kx, ky;
     createGaussianKernels(kx, ky, type, ksize, sigma1, sigma2);
+
+    CV_OCL_RUN(_dst.isUMat() && _src.dims() <= 2 &&
+               ksize.width == 3 && ksize.height == 3 &&
+               (size_t)_src.rows() > ky.total() && (size_t)_src.cols() > kx.total(),
+               ocl_GaussianBlur3x3_8UC1(_src, _dst, CV_MAT_DEPTH(type), kx, ky, borderType));
+
     sepFilter2D(_src, _dst, CV_MAT_DEPTH(type), kx, ky, Point(-1,-1), 0, borderType );
 }
 
@@ -3086,8 +3433,6 @@ public:
 
       virtual void operator() (const Range& range) const
       {
-          CV_INSTRUMENT_REGION_IPP()
-
           int d = radius * 2 + 1;
           IppiSize kernel = {d, d};
           IppiSize roi={dst.cols, range.end - range.start};
